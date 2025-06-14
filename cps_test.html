@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<title>CPS Test</title>
+<HTA:APPLICATION
+  ID="app"
+  APPLICATIONNAME="CPS"
+  BORDER="thin"
+  CAPTION="yes"
+  SHOWINTASKBAR="no"
+  SINGLEINSTANCE="yes"
+  SYSMENU="yes"
+  WINDOWSTATE="normal"
+/>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: white;
+    color: black;
+    text-align: center;
+  }
+  #circle {
+    width: 150px;
+    height: 150px;
+    line-height: 150px;
+    border-radius: 50%;
+    background-color: #f0f0f0;
+    border: 2px solid black;
+    font-size: 2em;
+    cursor: pointer;
+    user-select: none;
+    margin: 20px auto 30px auto;
+  }
+  button {
+    margin: 0 10px 15px 10px;
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+    transition: background-color 0.3s;
+  }
+  button:hover {
+    background-color: #ddd;
+  }
+  #scene-switcher {
+    margin-bottom: 20px;
+  }
+  #duration-select {
+    margin-bottom: 15px;
+  }
+  #animal-info {
+    margin-bottom: 15px;
+    font-weight: bold;
+  }
+  #loading {
+    font-size: 1.5em;
+    margin-bottom: 20px;
+  }
+  #created-by {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    font-size: 0.85em;
+    color: gray;
+    user-select: none;
+  }
+  .share-btn {
+    background-color: #25d366; /* WhatsApp yeşili */
+    color: white !important;
+    border: none;
+    border-radius: 5px;
+    padding: 8px 16px;
+    font-weight: bold;
+  }
+  .share-btn.email {
+    background-color: #0072c6; /* Mavi e-posta butonu */
+    margin-left: 5px;
+  }
+  .share-btn:hover {
+    opacity: 0.9;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">Yükleniyor...</div>
+
+<div id="scene-switcher" style="display:none;">
+  <button id="to-mouse-btn" style="display:none;">Fare CPS Testi</button>
+  <button id="to-spacebar-btn">Space Bar CPS Testi</button>
+</div>
+
+<div id="duration-select" style="display:none;">
+  <label for="duration">Süre (saniye): </label>
+  <select id="duration">
+    <option value="5">5</option>
+    <option value="10" selected>10</option>
+    <option value="15">15</option>
+  </select>
+</div>
+
+<div id="animal-info" style="display:none;"></div>
+
+<!-- Fare CPS Testi Sahnesi -->
+<div id="mouse-scene" style="display:none;">
+  <div id="circle">Tıkla</div>
+  <div>Skor: <span id="score">0</span></div>
+  <div>Yüksek Skor: <span id="highscore">0</span></div>
+  <div id="timer">Kalan Süre: 10s</div>
+  <div>
+    <button id="restart-btn">Yeniden Başlat</button>
+    <button id="theme-toggle">Tema Değiştir</button>
+    <button id="share-mouse-whatsapp" class="share-btn">WhatsApp'ta Paylaş</button>
+    <button id="share-mouse-email" class="share-btn email">E-posta ile Paylaş</button>
+  </div>
+</div>
+
+<!-- Space Bar CPS Testi Sahnesi -->
+<div id="spacebar-scene" style="display:none;">
+  <div id="spacebar-info">Space Bar'a Bas</div>
+  <div>Skor: <span id="spacebar-score">0</span></div>
+  <div>Yüksek Skor: <span id="spacebar-highscore">0</span></div>
+  <div id="spacebar-timer">Kalan Süre: 10s</div>
+  <div>
+    <button id="spacebar-restart-btn">Yeniden Başlat</button>
+    <button id="spacebar-theme-toggle">Tema Değiştir</button>
+    <button id="share-spacebar-whatsapp" class="share-btn">WhatsApp'ta Paylaş</button>
+    <button id="share-spacebar-email" class="share-btn email">E-posta ile Paylaş</button>
+  </div>
+</div>
+
+<!-- Created By Neony -->
+<div id="created-by">Created By Neony</div>
+
+<script type="text/javascript">
+  var currentScene = "mouse";
+  var duration = 10000;
+
+  var fso;
+  var filePathMouse = "highscore_mouse.txt";
+  var filePathSpacebar = "highscore_spacebar.txt";
+
+  var mouseScore = 0, mouseHighScore = 0, mouseGameOver = false;
+  var mouseTimer = null, mouseStartTime = null;
+
+  var spacebarScore = 0, spacebarHighScore = 0, spacebarGameOver = false;
+  var spacebarTimer = null, spacebarStartTime = null;
+
+  var spacebarPressed = false;
+
+  // Tarayıcı kontrolü (IE ise false)
+  function isModernBrowser() {
+    var ua = navigator.userAgent;
+    var isIE = ua.indexOf("MSIE ") > -1 || ua.indexOf("Trident/") > -1;
+    return !isIE;
+  }
+
+  function loadHighScore(path) {
+    try {
+      fso = new ActiveXObject("Scripting.FileSystemObject");
+      if (fso.FileExists(path)) {
+        var file = fso.OpenTextFile(path, 1);
+        var val = file.ReadLine();
+        file.Close();
+        return parseInt(val) || 0;
+      } else {
+        return 0;
+      }
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function saveHighScore(path, score) {
+    try {
+      var file = fso.CreateTextFile(path, true);
+      file.WriteLine(score);
+      file.Close();
+    } catch (e) {
+      // sessiz geç
+    }
+  }
+
+  // Fare sahnesi fonksiyonları
+  function updateMouseScore() {
+    document.getElementById("score").innerText = mouseScore;
+  }
+  function updateMouseTimer() {
+    var now = new Date().getTime();
+    var elapsed = now - mouseStartTime;
+    var remaining = Math.max(0, duration - elapsed);
+    var secondsLeft = Math.ceil(remaining / 1000);
+    document.getElementById("timer").innerText = "Kalan Süre: " + secondsLeft + "s";
+
+    if (remaining <= 0) {
+      clearInterval(mouseTimer);
+      mouseGameOver = true;
+      document.getElementById("timer").innerText = "Süre Doldu! Skorun: " + mouseScore;
+      var circle = document.getElementById("circle");
+      circle.innerText = "Bitti!";
+      circle.style.cursor = "not-allowed";
+
+      if (mouseScore > mouseHighScore) {
+        mouseHighScore = mouseScore;
+        document.getElementById("highscore").innerText = mouseHighScore;
+        saveHighScore(filePathMouse, mouseHighScore);
+      }
+    }
+  }
+  function startMouseTimer() {
+    mouseStartTime = new Date().getTime();
+    mouseTimer = setInterval(updateMouseTimer, 100);
+  }
+  function mouseClick() {
+    if (mouseGameOver) return;
+    if (!mouseStartTime) startMouseTimer();
+    mouseScore++;
+    updateMouseScore();
+
+    if (window.getSelection) {
+      window.getSelection().removeAllRanges();
+    } else if (document.selection) {
+      document.selection.empty();
+    }
+  }
+  function mouseRestart() {
+    if (mouseTimer) clearInterval(mouseTimer);
+    mouseScore = 0;
+    mouseGameOver = false;
+    mouseStartTime = null;
+    updateMouseScore();
+
+    document.getElementById("timer").innerText = "Kalan Süre: " + (duration / 1000) + "s";
+    var circle = document.getElementById("circle");
+    circle.innerText = "Tıkla";
+    circle.style.cursor = "pointer";
+  }
+
+  // Spacebar sahnesi fonksiyonları
+  function updateSpacebarScore() {
+    document.getElementById("spacebar-score").innerText = spacebarScore;
+  }
+  function updateSpacebarTimer() {
+    var now = new Date().getTime();
+    var elapsed = now - spacebarStartTime;
+    var remaining = Math.max(0, duration - elapsed);
+    var secondsLeft = Math.ceil(remaining / 1000);
+    document.getElementById("spacebar-timer").innerText = "Kalan Süre: " + secondsLeft + "s";
+
+    if (remaining <= 0) {
+      clearInterval(spacebarTimer);
+      spacebarGameOver = true;
+      document.getElementById("spacebar-timer").innerText = "Süre Doldu! Skorun: " + spacebarScore;
+      var info = document.getElementById("spacebar-info");
+      info.innerText = "Bitti!";
+
+      if (spacebarScore > spacebarHighScore) {
+        spacebarHighScore = spacebarScore;
+        document.getElementById("spacebar-highscore").innerText = spacebarHighScore;
+        saveHighScore(filePathSpacebar, spacebarHighScore);
+      }
+    }
+  }
+  function startSpacebarTimer() {
+    spacebarStartTime = new Date().getTime();
+    spacebarTimer = setInterval(updateSpacebarTimer, 100);
+  }
+  function spacebarKeyDown(e) {
+    e = e || window.event;
+    if (currentScene !== "spacebar") return;
+    if (spacebarGameOver) return;
+
+    var key = e.keyCode || e.which;
+    if (key === 32) { // space tuşu
+      if (spacebarPressed) return;
+
+      spacebarPressed = true;
+
+      if (e.preventDefault) e.preventDefault();
+      else e.returnValue = false;
+
+      if (!spacebarStartTime) startSpacebarTimer();
+      spacebarScore++;
+      updateSpacebarScore();
+    }
+  }
+  function spacebarKeyUp(e) {
+    e = e || window.event;
+    var key = e.keyCode || e.which;
+    if (key === 32) {
+      spacebarPressed = false;
+    }
+  }
+  function spacebarRestart() {
+    if (spacebarTimer) clearInterval(spacebarTimer);
+    spacebarScore = 0;
+    spacebarGameOver = false;
+    spacebarStartTime = null;
+    updateSpacebarScore();
+
+    document.getElementById("spacebar-timer").innerText = "Kalan Süre: " + (duration / 1000) + "s";
+    document.getElementById("spacebar-info").innerText = "Space Bar'a Bas";
+    spacebarPressed = false;
+  }
+
+  // Tema değiştirme fonksiyonu
+  var darkTheme = false;
+  function toggleTheme() {
+    darkTheme = !darkTheme;
+    var circle = document.getElementById("circle");
+    var buttons = document.getElementsByTagName("button");
+
+    if (darkTheme) {
+      document.body.style.backgroundColor = "#121212";
+      document.body.style.color = "white";
+      if (circle) {
+        circle.style.backgroundColor = "#333";
+        circle.style.borderColor = "white";
+        circle.style.color = "white";
+      }
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].style.backgroundColor = "#333";
+        buttons[i].style.color = "white";
+        buttons[i].style.border = "1px solid white";
+      }
+    } else {
+      document.body.style.backgroundColor = "white";
+      document.body.style.color = "black";
+      if (circle) {
+        circle.style.backgroundColor = "#f0f0f0";
+        circle.style.borderColor = "black";
+        circle.style.color = "black";
+      }
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].style.backgroundColor = "#f0f0f0";
+        buttons[i].style.color = "black";
+        buttons[i].style.border = "none";
+      }
+    }
+  }
+
+  // Sahne geçişleri ve başlangıç
+  function showScene(scene) {
+    currentScene = scene;
+    if (scene === "mouse") {
+      document.getElementById("mouse-scene").style.display = "block";
+      document.getElementById("spacebar-scene").style.display = "none";
+      document.getElementById("to-spacebar-btn").style.display = "inline-block";
+      document.getElementById("to-mouse-btn").style.display = "none";
+
+      document.getElementById("duration-select").style.display = "block";
+      document.getElementById("animal-info").style.display = "block";
+
+      mouseHighScore = loadHighScore(filePathMouse);
+      document.getElementById("highscore").innerText = mouseHighScore;
+
+      mouseRestart();
+      document.onkeydown = null;
+      document.onkeyup = null;
+    } else if (scene === "spacebar") {
+      document.getElementById("mouse-scene").style.display = "none";
+      document.getElementById("spacebar-scene").style.display = "block";
+      document.getElementById("to-spacebar-btn").style.display = "none";
+      document.getElementById("to-mouse-btn").style.display = "inline-block";
+
+      document.getElementById("duration-select").style.display = "block";
+      document.getElementById("animal-info").style.display = "none";
+
+      spacebarHighScore = loadHighScore(filePathSpacebar);
+      document.getElementById("spacebar-highscore").innerText = spacebarHighScore;
+
+      spacebarRestart();
+
+      document.onkeydown = spacebarKeyDown;
+      document.onkeyup = spacebarKeyUp;
+    }
+  }
+
+  // Paylaşım fonksiyonları
+  function shareWhatsApp(score, testName) {
+    if (!isModernBrowser()) {
+      alert("Paylaşım bu tarayıcıda desteklenmiyor.");
+      return;
+    }
+    var text = encodeURIComponent(testName + " testi skorum: " + score + " CPS!");
+    var url = "https://wa.me/?text=" + text;
+    window.open(url, "_blank");
+  }
+  function shareEmail(score, testName) {
+    if (!isModernBrowser()) {
+      alert("Paylaşım bu tarayıcıda desteklenmiyor.");
+      return;
+    }
+    var subject = encodeURIComponent(testName + " CPS Testi Skorum");
+    var body = encodeURIComponent("Merhaba,\n\n" + testName + " testi skorum: " + score + " CPS!\n\nSen de dene!");
+    var mailtoLink = "mailto:?subject=" + subject + "&body=" + body;
+    window.location.href = mailtoLink;
+  }
+
+  window.onload = function() {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("scene-switcher").style.display = "block";
+
+    // Varsayılan sahne
+    showScene("spacebar");
+
+    // Buton eventleri
+    document.getElementById("to-mouse-btn").onclick = function() {
+      showScene("mouse");
+    };
+    document.getElementById("to-spacebar-btn").onclick = function() {
+      showScene("spacebar");
+    };
+
+    document.getElementById("duration").onchange = function() {
+      duration = parseInt(this.value) * 1000;
+      if (currentScene === "mouse") {
+        mouseRestart();
+      } else {
+        spacebarRestart();
+      }
+    };
+
+    document.getElementById("circle").onclick = mouseClick;
+    document.getElementById("restart-btn").onclick = mouseRestart;
+    document.getElementById("theme-toggle").onclick = toggleTheme;
+
+    document.getElementById("spacebar-restart-btn").onclick = spacebarRestart;
+    document.getElementById("spacebar-theme-toggle").onclick = toggleTheme;
+
+    // Paylaşım butonları
+    document.getElementById("share-mouse-whatsapp").onclick = function() {
+      shareWhatsApp(mouseScore, "Fare");
+    };
+    document.getElementById("share-mouse-email").onclick = function() {
+      shareEmail(mouseScore, "Fare");
+    };
+    document.getElementById("share-spacebar-whatsapp").onclick = function() {
+      shareWhatsApp(spacebarScore, "Space Bar");
+    };
+    document.getElementById("share-spacebar-email").onclick = function() {
+      shareEmail(spacebarScore, "Space Bar");
+    };
+  };
+</script>
+</body>
+</html>
