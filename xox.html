@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>XO Oyunu</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(to bottom, #f4f4f4, #ddd);
+      transition: background 0.3s, color 0.3s;
+      color: #333;
+      text-align: center;
+    }
+
+    body.dark {
+      background: linear-gradient(to bottom, #121212, #1e1e1e);
+      color: #eee;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .controls, .status, .scoreboard, .share {
+      margin-top: 20px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      gap: 10px;
+      justify-content: center;
+      margin-top: 30px;
+    }
+
+    .cell {
+      width: 100px;
+      height: 100px;
+      font-size: 60px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background-color 0.3s;
+      border: 2px solid #ccc;
+      position: relative;
+    }
+
+    body.dark .cell {
+      background: #222;
+      color: #eee;
+    }
+
+    .cell svg {
+      width: 60px;
+      height: 60px;
+      stroke: #2b2b2b;
+      stroke-width: 5;
+      fill: none;
+      stroke-dasharray: 188;
+      stroke-dashoffset: 188;
+      animation: drawO 0.6s forwards;
+    }
+
+    @keyframes drawO {
+      to { stroke-dashoffset: 0; }
+    }
+
+    .x-anim {
+      animation: drawX 0.5s ease-out forwards;
+      position: relative;
+    }
+
+    @keyframes drawX {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    button, select, input {
+      padding: 10px;
+      margin: 5px;
+      font-size: 16px;
+      border-radius: 5px;
+      border: none;
+    }
+
+    .share button {
+      transition: transform 0.3s;
+    }
+
+    .share button:active {
+      transform: rotate(360deg);
+    }
+
+    .whatsapp { background: #25D366; color: white; }
+    .telegram { background: #0088cc; color: white; }
+    .twitter { background: #1DA1F2; color: white; }
+    .facebook { background: #1877F2; color: white; }
+
+    #musicBtn {
+      background: transparent;
+      font-size: 24px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>XO Oyunu</h1>
+    <div class="controls">
+      <input id="playerX" placeholder="Oyuncu X adı" />
+      <input id="playerO" placeholder="Oyuncu O adı" />
+      <select id="modeSelect">
+        <option value="2p">2 Kişilik</option>
+        <option value="ai">Yapay Zeka</option>
+      </select>
+      <select id="langSelect">
+        <option value="tr">Türkçe</option>
+        <option value="en">English</option>
+      </select>
+      <button onclick="toggleTheme()">🌗</button>
+      <button onclick="toggleMusic()" id="musicBtn">🔊</button>
+    </div>
+
+    <div class="scoreboard" id="scoreboard">
+      X: 0 | O: 0 | 🤝: 0
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="status" id="status">Sıra: X</div>
+    <button onclick="resetGame()">Yeniden Başlat</button>
+
+    <div class="share">
+      <button class="whatsapp" onclick="share('whatsapp')">WhatsApp</button>
+      <button class="telegram" onclick="share('telegram')">Telegram</button>
+      <button class="twitter" onclick="share('twitter')">Twitter</button>
+      <button class="facebook" onclick="share('facebook')">Facebook</button>
+    </div>
+  </div>
+
+  <audio id="bgMusic" src="https://cdn.pixabay.com/download/audio/2022/03/22/audio_35611e85fc.mp3?filename=lofi-chill-medium-version-112191.mp3" loop autoplay></audio>
+
+  <script>
+    const boardEl = document.getElementById("board");
+    const statusEl = document.getElementById("status");
+    const modeSelect = document.getElementById("modeSelect");
+    const bgMusic = document.getElementById("bgMusic");
+    let lang = "tr", theme = "light";
+    let board = Array(9).fill("");
+    let currentPlayer = "X";
+    let gameOver = false;
+    let score = { X: 0, O: 0, D: 0 };
+
+    const translations = {
+      tr: { turn: "Sıra: ", win: "Kazanan: ", draw: "Berabere!", reset: "Yeniden Başlat" },
+      en: { turn: "Turn: ", win: "Winner: ", draw: "Draw!", reset: "Restart" }
+    };
+
+    function renderBoard() {
+      boardEl.innerHTML = "";
+      board.forEach((val, idx) => {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.dataset.index = idx;
+        if (val === "X") {
+          cell.textContent = "X";
+          cell.classList.add("x-anim");
+        } else if (val === "O") {
+          cell.innerHTML = `<svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="25"/></svg>`;
+        }
+        cell.addEventListener("click", handleClick);
+        boardEl.appendChild(cell);
+      });
+    }
+
+    function handleClick(e) {
+      const idx = e.currentTarget.dataset.index;
+      if (board[idx] || gameOver) return;
+      board[idx] = currentPlayer;
+      if (checkWin(currentPlayer)) {
+        gameOver = true;
+        score[currentPlayer]++;
+        statusEl.textContent = translations[lang].win + currentPlayer;
+        updateScore();
+        return;
+      }
+      if (!board.includes("")) {
+        gameOver = true;
+        score.D++;
+        statusEl.textContent = translations[lang].draw;
+        updateScore();
+        return;
+      }
+      currentPlayer = currentPlayer === "X" ? "O" : "X";
+      statusEl.textContent = translations[lang].turn + currentPlayer;
+      renderBoard();
+      if (modeSelect.value === "ai" && currentPlayer === "O" && !gameOver) {
+        setTimeout(aiMove, 300);
+      }
+    }
+
+    function aiMove() {
+      const best = minimax(board, "O").index;
+      board[best] = "O";
+      if (checkWin("O")) {
+        gameOver = true;
+        score["O"]++;
+        statusEl.textContent = translations[lang].win + "O";
+      } else if (!board.includes("")) {
+        gameOver = true;
+        score.D++;
+        statusEl.textContent = translations[lang].draw;
+      } else {
+        currentPlayer = "X";
+        statusEl.textContent = translations[lang].turn + currentPlayer;
+      }
+      updateScore();
+      renderBoard();
+    }
+
+    function checkWin(p) {
+      const win = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+      return win.some(([a,b,c]) => board[a] === p && board[b] === p && board[c] === p);
+    }
+
+    function minimax(newBoard, player) {
+      const avail = newBoard.map((v,i) => v === "" ? i : null).filter(v => v !== null);
+      if (checkWin("X")) return { score: -10 };
+      if (checkWin("O")) return { score: 10 };
+      if (avail.length === 0) return { score: 0 };
+
+      const moves = [];
+      for (let i of avail) {
+        let move = {};
+        move.index = i;
+        newBoard[i] = player;
+        const result = minimax(newBoard, player === "O" ? "X" : "O");
+        move.score = result.score;
+        newBoard[i] = "";
+        moves.push(move);
+      }
+
+      const bestMove = player === "O"
+        ? moves.reduce((a,b) => b.score > a.score ? b : a)
+        : moves.reduce((a,b) => b.score < a.score ? b : a);
+      return bestMove;
+    }
+
+    function updateScore() {
+      document.getElementById("scoreboard").textContent = `X: ${score.X} | O: ${score.O} | 🤝: ${score.D}`;
+    }
+
+    function resetGame() {
+      board = Array(9).fill("");
+      gameOver = false;
+      currentPlayer = "X";
+      statusEl.textContent = translations[lang].turn + currentPlayer;
+      renderBoard();
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle("dark");
+    }
+
+    function toggleMusic() {
+      bgMusic.paused ? bgMusic.play() : bgMusic.pause();
+    }
+
+    document.getElementById("langSelect").addEventListener("change", e => {
+      lang = e.target.value;
+      resetGame();
+    });
+
+    function share(platform) {
+      const url = encodeURIComponent(location.href);
+      const msg = encodeURIComponent("Harika bir XO oyunu oyna!");
+      let shareUrl = "";
+      switch (platform) {
+        case "whatsapp": shareUrl = `https://wa.me/?text=${msg}%20${url}`; break;
+        case "telegram": shareUrl = `https://t.me/share/url?url=${url}&text=${msg}`; break;
+        case "twitter": shareUrl = `https://twitter.com/intent/tweet?text=${msg}&url=${url}`; break;
+        case "facebook": shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`; break;
+      }
+      window.open(shareUrl, "_blank");
+    }
+
+    renderBoard();
+  </script>
+</body>
+</html>
